@@ -20,6 +20,7 @@ import java.util.Locale;
 
 import org.apache.ibatis.builder.BaseBuilder;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.executor.keygen.DelegatingKeyGenerator;
 import org.apache.ibatis.executor.keygen.Jdbc3KeyGenerator;
 import org.apache.ibatis.executor.keygen.KeyGenerator;
 import org.apache.ibatis.executor.keygen.NoKeyGenerator;
@@ -90,6 +91,9 @@ public class XMLStatementBuilder extends BaseBuilder {
     // Parse selectKey after includes and remove them.
     processSelectKeyNodes(id, parameterTypeClass, langDriver);
     
+    // Parse customKey after includes and remove them.
+    processCustomKeyNodes(id, parameterTypeClass, langDriver); 
+    
     // Parse the SQL (pre: <selectKey> and <include> were parsed and removed)
     SqlSource sqlSource = langDriver.createSqlSource(configuration, context, parameterTypeClass);
     String resultSets = context.getStringAttribute("resultSets");
@@ -101,9 +105,14 @@ public class XMLStatementBuilder extends BaseBuilder {
     if (configuration.hasKeyGenerator(keyStatementId)) {
       keyGenerator = configuration.getKeyGenerator(keyStatementId);
     } else {
-      keyGenerator = context.getBooleanAttribute("useGeneratedKeys",
-          configuration.isUseGeneratedKeys() && SqlCommandType.INSERT.equals(sqlCommandType))
-          ? Jdbc3KeyGenerator.INSTANCE : NoKeyGenerator.INSTANCE;
+      keyStatementId = id + DelegatingKeyGenerator.CUSTOM_KEY_SUFFIX;
+      keyStatementId = builderAssistant.applyCurrentNamespace(keyStatementId, true);
+      if (configuration.hasKeyGenerator(keyStatementId)) {
+        keyGenerator = configuration.getKeyGenerator(keyStatementId);
+      } else {
+        keyGenerator = context.getBooleanAttribute("useGeneratedKeys",
+        configuration.isUseGeneratedKeys() && SqlCommandType.INSERT.equals(sqlCommandType))
+        ? Jdbc3KeyGenerator.INSTANCE : NoKeyGenerator.INSTANCE;}
     }
 
     builderAssistant.addMappedStatement(id, sqlSource, statementType, sqlCommandType,
@@ -169,7 +178,40 @@ public class XMLStatementBuilder extends BaseBuilder {
       nodeToHandle.getParent().getNode().removeChild(nodeToHandle.getNode());
     }
   }
+  
+  private void processCustomKeyNodes(String id, Class<?> parameterTypeClass, LanguageDriver langDriver) {
+    List<XNode> customKeyNodes = context.evalNodes("customKey");
+    if (configuration.getDatabaseId() != null) {
+      parseCustomKeyNodes(id, customKeyNodes, parameterTypeClass, langDriver, configuration.getDatabaseId());
+    }
+    parseCustomKeyNodes(id, customKeyNodes, parameterTypeClass, langDriver, null);
+    removeCustomKeyNodes(customKeyNodes);
+  }
 
+  private void parseCustomKeyNodes(String parentId, List<XNode> list, Class<?> parameterTypeClass, LanguageDriver langDriver, String skRequiredDatabaseId) {
+    for (XNode nodeToHandle : list) {
+      String id = parentId + DelegatingKeyGenerator.CUSTOM_KEY_SUFFIX;
+      String databaseId = nodeToHandle.getStringAttribute("databaseId");
+      if (databaseIdMatchesCurrent(id, databaseId, skRequiredDatabaseId)) {
+        parseCustomKeyNode(id, nodeToHandle, parameterTypeClass, langDriver, databaseId);
+      }
+    }
+  }
+
+  private void parseCustomKeyNode(String id, XNode nodeToHandle, Class<?> parameterTypeClass, LanguageDriver langDriver, String databaseId) {
+    String keyProperty = nodeToHandle.getStringAttribute("keyProperty");
+    boolean executeBefore = "BEFORE".equals(nodeToHandle.getStringAttribute("order", "AFTER"));
+    
+    id = builderAssistant.applyCurrentNamespace(id, false);
+    configuration.addKeyGenerator(id, new DelegatingKeyGenerator(configuration.getCustomKeyGenerator(), keyProperty, executeBefore));
+  }
+  
+  private void removeCustomKeyNodes(List<XNode> customKeyNodes) {
+    for (XNode nodeToHandle : customKeyNodes) {
+        nodeToHandle.getParent().getNode().removeChild(nodeToHandle.getNode());
+    }
+  }
+  
   private boolean databaseIdMatchesCurrent(String id, String databaseId, String requiredDatabaseId) {
     if (requiredDatabaseId != null) {
       if (!requiredDatabaseId.equals(databaseId)) {
