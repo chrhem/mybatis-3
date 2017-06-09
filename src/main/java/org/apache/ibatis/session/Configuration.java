@@ -45,6 +45,7 @@ import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.executor.ReuseExecutor;
 import org.apache.ibatis.executor.SimpleExecutor;
 import org.apache.ibatis.executor.keygen.KeyGenerator;
+import org.apache.ibatis.executor.keygen.CustomKeyGenerator;
 import org.apache.ibatis.executor.loader.ProxyFactory;
 import org.apache.ibatis.executor.loader.cglib.CglibProxyFactory;
 import org.apache.ibatis.executor.loader.javassist.JavassistProxyFactory;
@@ -109,6 +110,8 @@ public class Configuration {
   protected boolean callSettersOnNulls;
   protected boolean useActualParamName = true;
   protected boolean returnInstanceForEmptyRow;
+  protected CustomKeyGenerator customKeyGenerator;
+
 
   protected String logPrefix;
   protected Class <? extends Log> logImpl;
@@ -323,6 +326,16 @@ public class Configuration {
     this.autoMappingBehavior = autoMappingBehavior;
   }
 
+  /**
+   * @since TODO
+   */
+  public CustomKeyGenerator getCustomKeyGenerator() {
+    return customKeyGenerator;
+  }
+
+  public void setCustomKeyGenerator(CustomKeyGenerator generator) {
+    this.customKeyGenerator = generator;
+  }
   /**
    * @since 3.4.0
    */
@@ -911,5 +924,6 @@ public class Configuration {
       }
     }
   }
+
 
 }

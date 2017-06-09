@@ -184,7 +184,7 @@ resultOrdered (true|false) #IMPLIED
 resultSets CDATA #IMPLIED 
 >
 
-<!ELEMENT insert (#PCDATA | selectKey | include | trim | where | set | foreach | choose | if | bind)*>
+<!ELEMENT insert (#PCDATA | selectKey | customKey | include | trim | where | set | foreach | choose | if | bind)*>
 <!ATTLIST insert
 id CDATA #REQUIRED
 parameterMap CDATA #IMPLIED
@@ -209,7 +209,7 @@ order (BEFORE|AFTER) #IMPLIED
 databaseId CDATA #IMPLIED
 >
 
-<!ELEMENT update (#PCDATA | selectKey | include | trim | where | set | foreach | choose | if | bind)*>
+<!ELEMENT update (#PCDATA | selectKey | customKey | include | trim | where | set | foreach | choose | if | bind)*>
 <!ATTLIST update
 id CDATA #REQUIRED
 parameterMap CDATA #IMPLIED
@@ -222,6 +222,13 @@ useGeneratedKeys (true|false) #IMPLIED
 keyColumn CDATA #IMPLIED
 databaseId CDATA #IMPLIED
 lang CDATA #IMPLIED
+>
+
+<!ELEMENT customKey EMPTY>
+<!ATTLIST customKey
+keyProperty CDATA #IMPLIED
+order (BEFORE|AFTER) #IMPLIED
+databaseId CDATA #IMPLIED
 >
 
 <!ELEMENT delete (#PCDATA | include | trim | where | set | foreach | choose | if | bind)*>

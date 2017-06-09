@@ -39,6 +39,7 @@ import org.apache.ibatis.annotations.CacheNamespace;
 import org.apache.ibatis.annotations.CacheNamespaceRef;
 import org.apache.ibatis.annotations.Case;
 import org.apache.ibatis.annotations.ConstructorArgs;
+import org.apache.ibatis.annotations.CustomKey;
 import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.DeleteProvider;
 import org.apache.ibatis.annotations.Insert;
@@ -65,6 +66,7 @@ import org.apache.ibatis.builder.IncompleteElementException;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.cursor.Cursor;
+import org.apache.ibatis.executor.keygen.DelegatingKeyGenerator;
 import org.apache.ibatis.executor.keygen.Jdbc3KeyGenerator;
 import org.apache.ibatis.executor.keygen.KeyGenerator;
 import org.apache.ibatis.executor.keygen.NoKeyGenerator;
@@ -91,6 +93,7 @@ import org.apache.ibatis.type.UnknownTypeHandler;
 
 /**
  * @author Clinton Begin
+ * @author Christian Hempe
  */
 public class MapperAnnotationBuilder {
 
@@ -305,9 +308,14 @@ public class MapperAnnotationBuilder {
       if (SqlCommandType.INSERT.equals(sqlCommandType) || SqlCommandType.UPDATE.equals(sqlCommandType)) {
         // first check for SelectKey annotation - that overrides everything else
         SelectKey selectKey = method.getAnnotation(SelectKey.class);
+        CustomKey customKey = method.getAnnotation(CustomKey.class); 
+        //TODO add customkey
         if (selectKey != null) {
           keyGenerator = handleSelectKeyAnnotation(selectKey, mappedStatementId, getParameterType(method), languageDriver);
           keyProperty = selectKey.keyProperty();
+        } else if (customKey != null) {
+          keyGenerator = handleCustomKeyAnnotation(customKey, mappedStatementId, getParameterType(method), languageDriver);
+          keyProperty = customKey.keyProperty();
         } else if (options == null) {
           keyGenerator = configuration.isUseGeneratedKeys() ? Jdbc3KeyGenerator.INSTANCE : NoKeyGenerator.INSTANCE;
         } else {
@@ -622,36 +630,48 @@ public class MapperAnnotationBuilder {
   }
 
   private KeyGenerator handleSelectKeyAnnotation(SelectKey selectKeyAnnotation, String baseStatementId, Class<?> parameterTypeClass, LanguageDriver languageDriver) {
-    String id = baseStatementId + SelectKeyGenerator.SELECT_KEY_SUFFIX;
-    Class<?> resultTypeClass = selectKeyAnnotation.resultType();
-    StatementType statementType = selectKeyAnnotation.statementType();
-    String keyProperty = selectKeyAnnotation.keyProperty();
-    String keyColumn = selectKeyAnnotation.keyColumn();
-    boolean executeBefore = selectKeyAnnotation.before();
+	  String id = baseStatementId + SelectKeyGenerator.SELECT_KEY_SUFFIX;
+	  Class<?> resultTypeClass = selectKeyAnnotation.resultType();
+	  StatementType statementType = selectKeyAnnotation.statementType();
+	  String keyProperty = selectKeyAnnotation.keyProperty();
+	  String keyColumn = selectKeyAnnotation.keyColumn();
+	  boolean executeBefore = selectKeyAnnotation.before();
+	  
+	  // defaults
+	  boolean useCache = false;
+	  KeyGenerator keyGenerator = NoKeyGenerator.INSTANCE;
+	  Integer fetchSize = null;
+	  Integer timeout = null;
+	  boolean flushCache = false;
+	  String parameterMap = null;
+	  String resultMap = null;
+	  ResultSetType resultSetTypeEnum = null;
+	  
+	  SqlSource sqlSource = buildSqlSourceFromStrings(selectKeyAnnotation.statement(), parameterTypeClass, languageDriver);
+	  SqlCommandType sqlCommandType = SqlCommandType.SELECT;
+	  
+	  assistant.addMappedStatement(id, sqlSource, statementType, sqlCommandType, fetchSize, timeout, parameterMap, parameterTypeClass, resultMap, resultTypeClass, resultSetTypeEnum,
+			  flushCache, useCache, false,
+			  keyGenerator, keyProperty, keyColumn, null, languageDriver, null);
+	  
+	  id = assistant.applyCurrentNamespace(id, false);
+	  
+	  MappedStatement keyStatement = configuration.getMappedStatement(id, false);
+	  SelectKeyGenerator answer = new SelectKeyGenerator(keyStatement, executeBefore);
+	  configuration.addKeyGenerator(id, answer);
+	  return answer;
+  }
 
-    // defaults
-    boolean useCache = false;
-    KeyGenerator keyGenerator = NoKeyGenerator.INSTANCE;
-    Integer fetchSize = null;
-    Integer timeout = null;
-    boolean flushCache = false;
-    String parameterMap = null;
-    String resultMap = null;
-    ResultSetType resultSetTypeEnum = null;
-
-    SqlSource sqlSource = buildSqlSourceFromStrings(selectKeyAnnotation.statement(), parameterTypeClass, languageDriver);
-    SqlCommandType sqlCommandType = SqlCommandType.SELECT;
-
-    assistant.addMappedStatement(id, sqlSource, statementType, sqlCommandType, fetchSize, timeout, parameterMap, parameterTypeClass, resultMap, resultTypeClass, resultSetTypeEnum,
-        flushCache, useCache, false,
-        keyGenerator, keyProperty, keyColumn, null, languageDriver, null);
-
-    id = assistant.applyCurrentNamespace(id, false);
-
-    MappedStatement keyStatement = configuration.getMappedStatement(id, false);
-    SelectKeyGenerator answer = new SelectKeyGenerator(keyStatement, executeBefore);
-    configuration.addKeyGenerator(id, answer);
-    return answer;
+  private KeyGenerator handleCustomKeyAnnotation(CustomKey customKeyAnnotation, String baseStatementId, Class<?> parameterTypeClass, LanguageDriver languageDriver) {
+	  String id = baseStatementId + DelegatingKeyGenerator.CUSTOM_KEY_SUFFIX;
+	  String keyProperty = customKeyAnnotation.keyProperty();
+	  boolean executeBefore = customKeyAnnotation.before();
+	  
+	  id = assistant.applyCurrentNamespace(id, false);
+	  
+	  DelegatingKeyGenerator answer = new DelegatingKeyGenerator(configuration.getCustomKeyGenerator(), keyProperty, executeBefore);
+	  configuration.addKeyGenerator(id, answer);
+	  return answer;
   }
 
 }

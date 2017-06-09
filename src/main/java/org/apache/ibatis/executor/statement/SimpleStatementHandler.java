@@ -1,5 +1,5 @@
 /**
- *    Copyright 2009-2015 the original author or authors.
+ *    Copyright 2009-2017 the original author or authors.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
  *    you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import java.util.List;
 
 import org.apache.ibatis.cursor.Cursor;
 import org.apache.ibatis.executor.Executor;
+import org.apache.ibatis.executor.keygen.DelegatingKeyGenerator;
 import org.apache.ibatis.executor.keygen.Jdbc3KeyGenerator;
 import org.apache.ibatis.executor.keygen.KeyGenerator;
 import org.apache.ibatis.executor.keygen.SelectKeyGenerator;
@@ -33,6 +34,7 @@ import org.apache.ibatis.session.RowBounds;
 
 /**
  * @author Clinton Begin
+ * @author Christian Hempe
  */
 public class SimpleStatementHandler extends BaseStatementHandler {
 
@@ -50,7 +52,7 @@ public class SimpleStatementHandler extends BaseStatementHandler {
       statement.execute(sql, Statement.RETURN_GENERATED_KEYS);
       rows = statement.getUpdateCount();
       keyGenerator.processAfter(executor, mappedStatement, statement, parameterObject);
-    } else if (keyGenerator instanceof SelectKeyGenerator) {
+    } else if (keyGenerator instanceof SelectKeyGenerator || keyGenerator instanceof DelegatingKeyGenerator) {
       statement.execute(sql);
       rows = statement.getUpdateCount();
       keyGenerator.processAfter(executor, mappedStatement, statement, parameterObject);
